@@ -134,7 +134,7 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
             const fetchedNamespaces = new Set(this._fetchedNamespaces);
             this._fetchedNamespaces.clear();
             Promise.all(Array.from(fetchedNamespaces).map(async(ns) => {
-                await this.prefetchLanguageTable(language, ns, true) || tableUpdated;
+                await this.prefetchLanguageTable(language, ns, true);
             })).then(() => {
                 this._onTableLoaded?.(this._language, language);
             });
