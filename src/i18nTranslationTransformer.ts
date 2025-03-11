@@ -7,11 +7,35 @@ import { chainBundle, getNodeComment, resolveAliasedSymbol } from "./transformer
 
 type TextKey = `${string}.${string}`; // namespace.key (e.g. "default.hello")
 
+export type FunctionCallMap = {
+    [key: TextKey]: {
+        filePath: string;
+        line: number;
+        column: number;
+    }[];
+}
+
+export type TranslationMap = {
+    [language: string]: {
+        [key: TextKey]: string;
+    };
+}
+
+export class I18nTranslationTransformerCache {
+    public textKeySet: Set<TextKey> | undefined;
+    public supportedLanguages: Set<string> | undefined;
+
+    public constructor() {
+        this.textKeySet = undefined;
+        this.supportedLanguages = undefined;
+    }
+}
+
 class TransformerBuilder {
     private readonly _program: ts.Program;
 
-    private readonly _supportedLanguages: Set<string>;
-    private readonly _textKeySet: Set<TextKey>;
+    private readonly _functionCallMapOutput: FunctionCallMap | undefined;
+    private readonly _cache: I18nTranslationTransformerCache;
 
     private readonly _resourceDir: string;
 
@@ -21,8 +45,12 @@ class TransformerBuilder {
     ) {
         this._program = program;
 
-        this._supportedLanguages = this._readConfig();
-        this._textKeySet = this._buildTextKeySet();
+        this._functionCallMapOutput = config?.functionCallMapOutput;
+
+        this._cache = config?.cache ?? new I18nTranslationTransformerCache();
+        if (this._cache.textKeySet === undefined || this._functionCallMapOutput !== undefined) {
+            this._cache.textKeySet = this._buildTextKeySet();
+        }
 
         this._resourceDir = config?.resourceDir ?? "src/language";
     }
@@ -36,6 +64,58 @@ class TransformerBuilder {
         };
 
         return chainBundle(visitor);
+    }
+
+    private _funtionCallMapAdd(key: TextKey, filePath: string, line: number, column: number): void {
+        if (!this._functionCallMapOutput) {
+            return;
+        }
+
+        if (!this._functionCallMapOutput[key]) {
+            this._functionCallMapOutput[key] = [];
+        }
+
+        this._functionCallMapOutput[key].push({ filePath, line, column });
+    }
+
+    private _buildTextKeySet(): Set<TextKey> {
+        const checker = this._program.getTypeChecker();
+
+        const set: Set<TextKey> = new Set();
+        for (const sourceFile of this._program.getSourceFiles()) {
+            const visitor = (node: ts.Node): void => {
+                if (ts.isCallExpression(node)) {
+                    const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
+                    if (symbol && symbol.valueDeclaration) {
+                        const comment = getNodeComment(symbol.valueDeclaration);
+                        if (comment.includes(locTextMethodComment)) {
+                            if (1 <= node.arguments.length && ts.isStringLiteral(node.arguments[0])) {
+                                const key = node.arguments[0].text;
+                                set.add(`default.${key}`);
+                                this._funtionCallMapAdd(`default.${key}`, sourceFile.fileName, node.getStart(sourceFile), node.getStart(sourceFile));
+                            } else {
+                                console.error("locTextMethod must have string literal argument");
+                            }
+                        } else if (comment.includes(nsLocTextMethodComment)) {
+                            if (2 <= node.arguments.length) {
+                                if (ts.isStringLiteral(node.arguments[0]) && ts.isStringLiteral(node.arguments[1])) {
+                                    const ns = node.arguments[0].text;
+                                    const key = node.arguments[1].text;
+                                    set.add(`${ns}.${key}`);
+                                    this._funtionCallMapAdd(`${ns}.${key}`, sourceFile.fileName, node.getStart(sourceFile), node.getStart(sourceFile));
+                                } else {
+                                    console.error("nsLocTextMethod must have string literal arguments");
+                                }
+                            }
+                        }
+                    }
+                }
+                ts.forEachChild(node, visitor);
+            };
+            ts.forEachChild(sourceFile, visitor);
+        }
+
+        return set;
     }
 
     private _readConfig(): Set<string> {
@@ -93,52 +173,18 @@ class TransformerBuilder {
         return supportedLanguages;
     }
 
-    private _buildTextKeySet(): Set<TextKey> {
-        const checker = this._program.getTypeChecker();
+    public updateTable(translationMap: TranslationMap): void {
+        const supportedLanguages = this._cache.supportedLanguages ?? this._readConfig();
+        this._cache.supportedLanguages = supportedLanguages;
 
-        const set: Set<TextKey> = new Set();
-        for (const sourceFile of this._program.getSourceFiles()) {
-            const visitor = (node: ts.Node): void => {
-                if (ts.isCallExpression(node)) {
-                    const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
-                    if (symbol && symbol.valueDeclaration) {
-                        const comment = getNodeComment(symbol.valueDeclaration);
-                        if (comment.includes(locTextMethodComment)) {
-                            if (1 <= node.arguments.length && ts.isStringLiteral(node.arguments[0])) {
-                                const key = node.arguments[0].text;
-                                set.add(`default.${key}`);
-                            } else {
-                                console.error("locTextMethod must have string literal argument");
-                            }
-                        } else if (comment.includes(nsLocTextMethodComment)) {
-                            if (2 <= node.arguments.length) {
-                                if (ts.isStringLiteral(node.arguments[0]) && ts.isStringLiteral(node.arguments[1])) {
-                                    const ns = node.arguments[0].text;
-                                    const key = node.arguments[1].text;
-                                    set.add(`${ns}.${key}`);
-                                } else {
-                                    console.error("nsLocTextMethod must have string literal arguments");
-                                }
-                            }
-                        }
-                    }
-                }
-                ts.forEachChild(node, visitor);
-            };
-            ts.forEachChild(sourceFile, visitor);
-        }
-
-        return set;
-    }
-
-    public updateTable(): void {
         const absoluteResourceDir = path.resolve(this._resourceDir);
+        translationMap;
 
         const languageFileNameToTextsMap = new Map<string, string[]>();
-        for (const textKey of this._textKeySet) {
+        for (const textKey of this._cache.textKeySet!) {
             const dotIndex = textKey.indexOf(".");
             const [ns, key] = [textKey.slice(0, dotIndex), textKey.slice(dotIndex + 1)];
-            for (const language of this._supportedLanguages) {
+            for (const language of supportedLanguages) {
                 const fileName = path.join(absoluteResourceDir, `${ns}.${language}.ts`);
 
                 let texts = languageFileNameToTextsMap.get(fileName);
@@ -200,12 +246,17 @@ class TransformerBuilder {
 
 export type TransformerConfig = {
     resourceDir?: string;
+    functionCallMapOutput?: FunctionCallMap;
+    translationMap?: TranslationMap;
+    cache?: I18nTranslationTransformerCache;
 };
 
-export function i18nUpdateTableTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
+export function i18nTranslationTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
     const builder = new TransformerBuilder(program, config);
-    builder.updateTable();
+    if (config?.translationMap) {
+        builder.updateTable(config.translationMap);
+    }
     return builder.makeTransformer.bind(builder);
 }
 
-export default i18nUpdateTableTransformer;
+export default i18nTranslationTransformer;

@@ -6,7 +6,8 @@
         "start": "webpack serve --env development",
         "build": "npm link ../dist && webpack --env production",
         "lint": "eslint src --fix --cache",
-        "i18n-codegen": "i18nt-codegen -r src/language"
+        "i18n-codegen": "i18nt-codegen -r src/language",
+        "i18n-translate": "i18nt-translate -r src/language"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.26.9",

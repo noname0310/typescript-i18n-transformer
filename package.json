@@ -4,13 +4,14 @@
     "description": "typescript transformer for auto i18n code generation",
     "main": "index.js",
     "bin": {
-        "i18nt-codegen": "i18nCodegen.js"
+        "i18nt-codegen": "i18nCodegen.js",
+        "i18nt-translate": "i18nTranslate.js"
     },
     "scripts": {
         "start": "npm run lint && npm run build && npm run test",
         "build": "ts-node publishScript.ts",
         "publish:lib": "npm run build && npm publish ./dist",
-        "test": "cd test && npm run build",
+        "test": "cd test && npm run build && npm run i18n-codegen",
         "lint": "eslint src --fix --cache"
     },
     "repository": {
