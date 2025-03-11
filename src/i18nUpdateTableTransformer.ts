@@ -9,8 +9,6 @@ type TextKey = `${string}.${string}`; // namespace.key (e.g. "default.hello")
 
 class TransformerBuilder {
     private readonly _program: ts.Program;
-    private readonly _locTextMethodSymbols: Set<ts.Symbol>;
-    private readonly _nsLocTextMethodSymbols: Set<ts.Symbol>;
 
     private readonly _supportedLanguages: Set<string>;
     private readonly _textKeySet: Set<TextKey>;
@@ -22,10 +20,8 @@ class TransformerBuilder {
         config?: TransformerConfig
     ) {
         this._program = program;
-        this._locTextMethodSymbols = new Set();
-        this._nsLocTextMethodSymbols = new Set();
 
-        this._supportedLanguages = this._gatherMethodSymbolsAndReadConfig();
+        this._supportedLanguages = this._readConfig();
         this._textKeySet = this._buildTextKeySet();
 
         this._resourceDir = config?.resourceDir ?? "src/language";
@@ -42,24 +38,13 @@ class TransformerBuilder {
         return chainBundle(visitor);
     }
 
-    private _gatherMethodSymbolsAndReadConfig(): Set<string> {
+    private _readConfig(): Set<string> {
         let constructorFound = false;
         const supportedLanguages: Set<string> = new Set();
 
         const checker = this._program.getTypeChecker();
         for (const sourceFile of this._program.getSourceFiles()) {
             const visitor = (node: ts.Node): void => {
-                if (ts.isMethodDeclaration(node)) {
-                    const symbol = checker.getSymbolAtLocation(node.name);
-                    if (!symbol) return;
-                    const comment = getNodeComment(node);
-                    console.log("comment", comment, symbol.name);
-                    if (comment.includes(locTextMethodComment)) {
-                        this._locTextMethodSymbols.add(symbol);
-                    } else if (comment.includes(nsLocTextMethodComment)) {
-                        this._nsLocTextMethodSymbols.add(symbol);
-                    }
-                }
                 if (ts.isNewExpression(node)) {
                     const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
                     if (symbol && symbol.valueDeclaration) {
@@ -116,8 +101,9 @@ class TransformerBuilder {
             const visitor = (node: ts.Node): void => {
                 if (ts.isCallExpression(node)) {
                     const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
-                    if (symbol) {
-                        if (this._locTextMethodSymbols.has(symbol)) {
+                    if (symbol && symbol.valueDeclaration) {
+                        const comment = getNodeComment(symbol.valueDeclaration);
+                        if (comment.includes(locTextMethodComment)) {
                             console.log("locTextMethod", node.arguments);
                             if (1 <= node.arguments.length && ts.isStringLiteral(node.arguments[0])) {
                                 const key = node.arguments[0].text;
@@ -125,7 +111,7 @@ class TransformerBuilder {
                             } else {
                                 console.error("locTextMethod must have string literal argument");
                             }
-                        } else if (this._nsLocTextMethodSymbols.has(symbol)) {
+                        } else if (comment.includes(nsLocTextMethodComment)) {
                             if (2 <= node.arguments.length) {
                                 if (ts.isStringLiteral(node.arguments[0]) && ts.isStringLiteral(node.arguments[1])) {
                                     const ns = node.arguments[0].text;
@@ -142,8 +128,6 @@ class TransformerBuilder {
             };
             ts.forEachChild(sourceFile, visitor);
         }
-
-        console.log(`Found ${set.size} text keys`, set);
 
         return set;
     }

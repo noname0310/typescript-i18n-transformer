@@ -6,8 +6,6 @@ import { chainBundle, getNodeComment, resolveAliasedSymbol } from "./transformer
 
 class TransformerBuilder {
     private readonly _program: ts.Program;
-    private readonly _locTextMethodSymbols: Set<ts.Symbol>;
-    private readonly _nsLocTextMethodSymbols: Set<ts.Symbol>;
     private readonly _replaceTable: Map<string, [number, number]>; // key: namespace.key, value: [index, foundCount]
     private readonly _availableLanguages: Set<string>;
 
@@ -16,11 +14,6 @@ class TransformerBuilder {
         config?: TransformerConfig
     ) {
         this._program = program;
-
-        this._locTextMethodSymbols = new Set();
-        this._nsLocTextMethodSymbols = new Set();
-
-        this._gatherMethodSymbols();
         const {table, languages} = this._buildReplacementTable();
         this._replaceTable = table;
         this._availableLanguages = languages;
@@ -36,30 +29,6 @@ class TransformerBuilder {
         };
 
         return chainBundle(visitor);
-    }
-
-    private _gatherMethodSymbols(): void {
-        const checker = this._program.getTypeChecker();
-        for (const sourceFile of this._program.getSourceFiles()) {
-            const visitor = (node: ts.Node): void => {
-                if (ts.isMethodDeclaration(node)) {
-                    const symbol = checker.getSymbolAtLocation(node.name);
-                    if (!symbol) return;
-                    const comment = getNodeComment(node);
-                    if (comment.includes(locTextMethodComment)) {
-                        this._locTextMethodSymbols.add(symbol);
-                    } else if (comment.includes(nsLocTextMethodComment)) {
-                        this._nsLocTextMethodSymbols.add(symbol);
-                    }
-                }
-                ts.forEachChild(node, visitor);
-            };
-            ts.forEachChild(sourceFile, visitor);
-        }
-
-        if (this._locTextMethodSymbols.size === 0 && this._nsLocTextMethodSymbols.size === 0) {
-            console.error("No I18N loc text method found in the program");
-        }
     }
 
     private _buildReplacementTable(): { table: Map<string, [number, number]>, languages: Set<string> } {
@@ -168,8 +137,9 @@ class TransformerBuilder {
             // Replace I18N loc text method calls
             if (ts.isCallExpression(node)) {
                 const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
-                if (symbol) {
-                    if (this._locTextMethodSymbols.has(symbol)) {
+                if (symbol && symbol.valueDeclaration) {
+                    const comment = getNodeComment(symbol.valueDeclaration);
+                    if (comment.includes(locTextMethodComment)) {
                         const args = node.arguments.slice();
                         let updated = false;
                         if (1 <= args.length && ts.isStringLiteral(args[0])) {
@@ -185,7 +155,7 @@ class TransformerBuilder {
                         if (updated) {
                             return factory.updateCallExpression(node, node.expression, node.typeArguments, args);
                         }
-                    } else if (this._nsLocTextMethodSymbols.has(symbol)) {
+                    } else if (comment.includes(nsLocTextMethodComment)) {
                         const args = node.arguments.slice();
                         let updated = false;
                         if (2 <= args.length && ts.isStringLiteral(args[0]) && ts.isStringLiteral(args[1])) {

@@ -1,6 +1,7 @@
 
 /** I18NTABLESYMBOL */
 export default {
+    "text": "텍스트"
 }; /** I18NTABLEEND */
 
 export const dynamic = {
