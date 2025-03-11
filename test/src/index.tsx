@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import type { I18nData } from "typescript-i18n-transformer/src/i18n";
+import { I18n } from "typescript-i18n-transformer/src/i18n";
 
 import { App } from "./App";
-import type { I18nData } from "./i18n";
-import { I18n } from "./i18n";
 
 const i18n = new I18n(
     {

@@ -33,8 +33,8 @@ type Key = string | number; // use alias for prevent typescript transformer bug
  * Resource file format
  */
 export interface I18nData {
-    table: { [key: Key]: string };
-    dynamicTable: { [key: string]: string };
+    default: { [key: Key]: string };
+    dynamic: { [key: string]: string };
 }
 
 interface I18nLanguageDataItem {
@@ -109,8 +109,8 @@ export class I18n<LanguageData extends I18nLanguageData, SupportedLanguage exten
         const key = namespace + "." + language as NamespaceString<SupportedLanguage>;
 
         const table = await this._languageData[language][namespace]();
-        tables.set(key, table.table);
-        dynamicTables.set(key, table.dynamicTable);
+        tables.set(key, table.default);
+        dynamicTables.set(key, table.dynamic);
 
         return [tables, dynamicTables];
     }

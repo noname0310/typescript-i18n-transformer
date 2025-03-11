@@ -1,9 +1,7 @@
-import fs from "fs";
 import path from "path";
 import ts, { factory } from "typescript";
 
-import type { I18nData } from "./i18n";
-import { i18nConstructorComment, locTextMethodComment, nsLocTextMethodComment } from "./i18nTransformerConstants";
+import { locTextMethodComment, nsLocTextMethodComment, tableComment } from "./i18nTransformerConstants";
 import { chainBundle, getNodeComment, resolveAliasedSymbol } from "./transformerCommon";
 
 class TransformerBuilder {
@@ -22,8 +20,10 @@ class TransformerBuilder {
         this._locTextMethodSymbols = new Set();
         this._nsLocTextMethodSymbols = new Set();
 
-        this._availableLanguages = this._gatherMethodSymbolsAndGetConfig();
+        this._gatherMethodSymbols();
         const {table, languages} = this._buildReplacementTable();
+        this._replaceTable = table;
+        this._availableLanguages = languages;
 
         config; // for future use
     }
@@ -38,34 +38,7 @@ class TransformerBuilder {
         return chainBundle(visitor);
     }
 
-    private static _getNamespaceFromFileName(fileName: string): string | undefined {
-        const dotIndex = fileName.lastIndexOf(".");
-        if (dotIndex === -1) {
-            return undefined;
-        }
-        const dot2Index = fileName.lastIndexOf(".", dotIndex - 1);
-        if (dot2Index === -1) {
-            return undefined;
-        }
-        return fileName.slice(0, dot2Index);
-    }
-
-    private static _getLanguageFromFileName(fileName: string): string | undefined {
-        const dotIndex = fileName.lastIndexOf(".");
-        if (dotIndex === -1) {
-            return undefined;
-        }
-        const dot2Index = fileName.lastIndexOf(".", dotIndex - 1);
-        if (dot2Index === -1) {
-            return undefined;
-        }
-        return fileName.slice(dot2Index + 1, dotIndex);
-    }
-
-    private _gatherMethodSymbolsAndGetConfig(): [string | undefined, string[]] {
-        let resourcePath: string | undefined = undefined;
-        const supportedLanguages: string[] = [];
-
+    private _gatherMethodSymbols(): void {
         const checker = this._program.getTypeChecker();
         for (const sourceFile of this._program.getSourceFiles()) {
             const visitor = (node: ts.Node): void => {
@@ -79,105 +52,81 @@ class TransformerBuilder {
                         this._nsLocTextMethodSymbols.add(symbol);
                     }
                 }
-
-                if (ts.isNewExpression(node)) {
-                    const symbol = resolveAliasedSymbol(checker, checker.getSymbolAtLocation(node.expression));
-                    if (symbol) {
-                        const comment = getNodeComment(node);
-                        if (comment.includes(i18nConstructorComment)) {
-                            if (resourcePath !== undefined) {
-                                console.error("Multiple I18N constructors found in the program");
-                            } else {
-                                const args = node.arguments;
-                                if (args === undefined || args.length < 2) {
-                                    throw new Error("I18N constructor must have at least two arguments");
-                                }
-
-                                const resourcePathArg = args[0];
-                                if (!ts.isStringLiteral(resourcePathArg)) {
-                                    throw new Error("I18N constructor must have a string literal argument");
-                                }
-                                resourcePath = resourcePathArg.text;
-
-                                const languagesArg = args[1];
-                                if (!ts.isArrayLiteralExpression(languagesArg)) {
-                                    throw new Error("I18N constructor must have an array literal argument");
-                                }
-                                for (const element of languagesArg.elements) {
-                                    if (!ts.isStringLiteral(element)) {
-                                        throw new Error("I18N constructor array literal must have string literal elements");
-                                    }
-                                    supportedLanguages.push(element.text);
-                                }
-                            }
-                        }
-                    }
-                }
-
                 ts.forEachChild(node, visitor);
             };
             ts.forEachChild(sourceFile, visitor);
         }
 
-        if (resourcePath === undefined) {
-            console.error("No I18N constructor found in the program");
-        }
-
         if (this._locTextMethodSymbols.size === 0 && this._nsLocTextMethodSymbols.size === 0) {
             console.error("No I18N loc text method found in the program");
         }
-
-        return [resourcePath, supportedLanguages];
     }
 
-    private _buildReplacementTable(resourcePath: string, availableLanguages: readonly string[]): {
-        files: string[],
-        table: Map<string, [number, number]>
-    } {
-        const table: Map<string, [number, number]> = new Map(); // key: namespace.key, value: [index, foundCount]
+    private _getNamespaceFromFilename(fileName: string): string | undefined {
+        const dotIndex = fileName.lastIndexOf(".");
+        if (dotIndex === -1) {
+            return undefined;
+        }
+        const dot2Index = fileName.lastIndexOf(".", dotIndex - 1);
+        if (dot2Index === -1) {
+            return undefined;
+        }
+        return fileName.slice(0, dot2Index);
+    }
 
-        const availableExtensions = availableLanguages.map(language => `.${language}.json`);
-        const files = fs.readdirSync(resourcePath).filter(file => {
-            if (path.extname(file) !== ".json") {
-                return false;
-            }
-
-            const dotIndex = file.lastIndexOf(".");
-            const dot2Index = dotIndex === -1 ? -1 : file.lastIndexOf(".", dotIndex - 1);
-            if (dot2Index === -1) {
-                return false;
-            }
-
-            const extension = file.slice(dot2Index);
-            return availableExtensions.includes(extension);
-        });
-
-        const indexStore = new Map<string, number>(); // key: namespace, value: nextIndex
-        for (const file of files) {
-            const namespace = TransformerBuilder._getNamespaceFromFileName(file);
+    private _buildReplacementTable(): { table: Map<string, [number, number]>, languages: Set<string> } {
+        const table: Map<string, [number, number]> = new Map();
+        const languages: Set<string> = new Set();
+        const indexCache: Map<string, number> = new Map(); // key: namespace, value: index
+        for (const sourceFile of this._program.getSourceFiles()) {
+            const fileName = path.basename(sourceFile.fileName, ".ts");
+            const namespace = this._getNamespaceFromFilename(fileName);
+            
+            console.log("fileName", fileName, "namespace", namespace); //debug
             if (namespace === undefined) {
                 continue;
             }
-            const filePath = path.join(resourcePath, file);
-            const content = fs.readFileSync(filePath, "utf8");
-
-            const staticTable = (JSON.parse(content) as I18nData).table;
-            for (const key of Object.keys(staticTable)) {
-                const fullKey = `${namespace}.${key}`;
-                let item = table.get(fullKey);
-                if (item === undefined) {
-                    const index = indexStore.get(namespace) ?? 0;
-                    indexStore.set(namespace, index + 1);
-                    item = [index, 0];
-                    table.set(fullKey, item);
+            const visitor = (node: ts.Node): void => {
+                if (ts.isExportAssignment(node)) {
+                    const comment = getNodeComment(node);
+                    if (comment.includes(tableComment)) {
+                        if (!ts.isObjectLiteralExpression(node.expression)) {
+                            console.error("I18N table must be an object literal");
+                            return;
+                        }
+                        const tableObj = node.expression;
+                        for (const prop of tableObj.properties) {
+                            if (ts.isPropertyAssignment(prop)) {
+                                if (!ts.isStringLiteral(prop.name)) {
+                                    console.error("I18N table key must be a string literal");
+                                    continue;
+                                }
+                                const key = prop.name.text;
+                                const fullKey = namespace + "." + key;
+                                let item = table.get(fullKey);
+                                if (item === undefined) {
+                                    const index = indexCache.get(namespace) ?? 0;
+                                    indexCache.set(namespace, index + 1);
+                                    item = [index, 0];
+                                    table.set(fullKey, item);
+                                }
+                                item[1] += 1;
+                            }
+                        }
+                        const dotIndex = fileName.lastIndexOf(".");
+                        const languageName = dotIndex === -1 ? fileName : fileName.slice(dotIndex + 1);
+                        console.log(languageName); //debug
+                        languages.add(languageName);
+                    }
                 }
-                item[1] += 1;
-            }
+                ts.forEachChild(node, visitor);
+            };
+            ts.forEachChild(sourceFile, visitor);
         }
 
         // Check if all languages have the same number of keys
         {
-            const languageCount = availableLanguages.length;
+            const languageCount = languages.size;
             for (const [key, item] of table) {
                 if (item[1] !== languageCount) {
                     console.error(`I18N table key has partial translations: ${key}`);
@@ -185,7 +134,7 @@ class TransformerBuilder {
             }
         }
 
-        return { files, table };
+        return { table, languages };
     }
 
     private _transformI18nMinify(
@@ -193,38 +142,38 @@ class TransformerBuilder {
         context: ts.TransformationContext
     ): ts.SourceFile {
         const checker = this._program.getTypeChecker();
-        const languageCount = this._availableLanguages.length;
+        const languageCount = this._availableLanguages.size;
         const visitor = (node: ts.Node): ts.Node => {
             // Replace I18N loc text table keys
-            // if (ts.isExportAssignment(node)) {
-            //     const comment = getNodeComment(node);
-            //     if (comment.includes(tableComment)) {
-            //         if (!ts.isObjectLiteralExpression(node.expression)) {
-            //             return node;
-            //         }
-            //         const tableObj = node.expression;
-            //         const newProperties = tableObj.properties.map(prop => {
-            //             if (ts.isPropertyAssignment(prop)) {
-            //                 if (!ts.isStringLiteral(prop.name)) {
-            //                     return prop;
-            //                 }
-            //                 const key = prop.name.text;
-            //                 const index = this._replaceTable.get(key);
-            //                 if (index === undefined) {
-            //                     console.error(`I18N table key not found: ${key}`);
-            //                     return prop;
-            //                 } else if (index[1] !== languageCount) {
-            //                     return prop;
-            //                 }
-            //                 const newKey = factory.createNumericLiteral(index[0]);
-            //                 return factory.createPropertyAssignment(newKey, prop.initializer);
-            //             }
-            //             return prop;
-            //         });
-            //         const newTableObj = factory.createObjectLiteralExpression(newProperties);
-            //         return factory.updateExportAssignment(node, node.modifiers, newTableObj);
-            //     }
-            // }
+            if (ts.isExportAssignment(node)) {
+                const comment = getNodeComment(node);
+                if (comment.includes(tableComment)) {
+                    if (!ts.isObjectLiteralExpression(node.expression)) {
+                        return node;
+                    }
+                    const tableObj = node.expression;
+                    const newProperties = tableObj.properties.map(prop => {
+                        if (ts.isPropertyAssignment(prop)) {
+                            if (!ts.isStringLiteral(prop.name)) {
+                                return prop;
+                            }
+                            const key = prop.name.text;
+                            const index = this._replaceTable.get(key);
+                            if (index === undefined) {
+                                console.error(`I18N table key not found: ${key}`);
+                                return prop;
+                            } else if (index[1] !== languageCount) {
+                                return prop;
+                            }
+                            const newKey = factory.createNumericLiteral(index[0]);
+                            return factory.createPropertyAssignment(newKey, prop.initializer);
+                        }
+                        return prop;
+                    });
+                    const newTableObj = factory.createObjectLiteralExpression(newProperties);
+                    return factory.updateExportAssignment(node, node.modifiers, newTableObj);
+                }
+            }
 
             // Replace I18N loc text method calls
             if (ts.isCallExpression(node)) {

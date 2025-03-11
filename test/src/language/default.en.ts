@@ -1,7 +1,10 @@
-export const table = {
-    "text": "text"
-};
+/* eslint-disable */
 
-export const dynamicTable = {
+/** I18NTABLESYMBOL */
+export default {
+    "text": "text"
+}; /** I18NTABLEEND */
+
+export const dynamic = {
     "dynamicText": "dynamic text"
 };

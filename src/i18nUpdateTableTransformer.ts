@@ -2,10 +2,12 @@ import fs from "fs";
 import path from "path";
 import ts from "typescript";
 
-import { locTextMethodComment, nsLocTextMethodComment } from "./i18nTransformerConstants";
+import { locTextMethodComment, nsLocTextMethodComment, tableComment } from "./i18nTransformerConstants";
 import { chainBundle, getNodeComment, resolveAliasedSymbol } from "./transformerCommon";
 
 type TextKey = `${string}.${string}`; // namespace.key (e.g. "default.hello")
+
+const supportedLanguages = ["en", "ko", "ja"];
 
 class TransformerBuilder {
     private readonly _program: ts.Program;
@@ -168,10 +170,10 @@ export type TransformerConfig = {
     //...
 };
 
-export function i18nUpdateTableTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
+export function i18nMinifyTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
     const builder = new TransformerBuilder(program, config);
     builder.updateTable();
     return builder.makeTransformer.bind(builder);
 }
 
-export default i18nUpdateTableTransformer;
+export default i18nMinifyTransformer;

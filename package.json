@@ -7,7 +7,6 @@
         "i18nt-codegen": "tspc --project tsconfig.i18ncodegen.json"
     },
     "scripts": {
-        "postinstall": "cd test && npm i",
         "start": "npm run lint && npm run build && npm run test",
         "build": "ts-node publishScript.ts",
         "publish:lib": "npm run build && npm publish ./dist",
