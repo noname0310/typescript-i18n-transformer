@@ -205,10 +205,10 @@ export type TransformerConfig = {
     resourceDir?: string;
 };
 
-export function i18nMinifyTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
+export function i18nUpdateTableTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
     const builder = new TransformerBuilder(program, config);
     builder.updateTable();
     return builder.makeTransformer.bind(builder);
 }
 
-export default i18nMinifyTransformer;
+export default i18nUpdateTableTransformer;
