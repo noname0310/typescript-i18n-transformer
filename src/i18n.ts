@@ -56,11 +56,11 @@ export interface I18nCreationOptions<SupportedLanguage extends string = string> 
     defaultLanguage?: SupportedLanguage;
     logger?: Logger;
     fallbackText?: string;
-    onTableLoaded?: () => void;
+    onTableLoaded?: (namespace: string, language: SupportedLanguage) => void;
 }
 
 /** I18NCONSTRUCTORSYMBOL */
-export class I18n<LanguageData extends I18nLanguageData, SupportedLanguage extends string = KeyOf<LanguageData>> {
+export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, SupportedLanguage extends string = KeyOf<LanguageData>> {
     private readonly _languageData: LanguageData;
     private readonly _supportedLanguages: SupportedLanguage[];
     private readonly _defaultLanguage: SupportedLanguage;
@@ -100,10 +100,10 @@ export class I18n<LanguageData extends I18nLanguageData, SupportedLanguage exten
         language: SupportedLanguage,
         namespace: string = "default"
     ): Promise<[
-        Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>,
+        Map<NamespaceString<SupportedLanguage>, { [key: Key]: string }>,
         Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>
     ]> {
-        const tables = new Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>();
+        const tables = new Map<NamespaceString<SupportedLanguage>, { [key: Key]: string }>();
         const dynamicTables = new Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>();
 
         const key = namespace + "." + language as NamespaceString<SupportedLanguage>;

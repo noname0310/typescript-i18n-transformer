@@ -104,7 +104,6 @@ class TransformerBuilder {
                     if (symbol && symbol.valueDeclaration) {
                         const comment = getNodeComment(symbol.valueDeclaration);
                         if (comment.includes(locTextMethodComment)) {
-                            console.log("locTextMethod", node.arguments);
                             if (1 <= node.arguments.length && ts.isStringLiteral(node.arguments[0])) {
                                 const key = node.arguments[0].text;
                                 set.add(`default.${key}`);
@@ -194,7 +193,8 @@ class TransformerBuilder {
         }
 
         for (const [fileName, textKeys] of languageFileNameToTextsMap) {
-            const content = `/* eslint-disable */\n\n/** ${tableComment} */\nexport default ${JSON.stringify(Object.fromEntries(textKeys.map(key => [key, key])), null, 4)}; /** ${tableEndPostFix} */\n`;
+            const content = `/* eslint-disable */\n\n/** ${tableComment} */\nexport default ${JSON.stringify(Object.fromEntries(textKeys.map(key => [key, key])), null, 4)}; /** ${tableEndPostFix} */\n\nexport const dynamic: Record<string, string> = {};\n`;
+            fs.mkdirSync(path.dirname(fileName), { recursive: true });
             fs.writeFileSync(fileName, content, "utf-8");
             console.log(`Created ${fileName}`);
         }
