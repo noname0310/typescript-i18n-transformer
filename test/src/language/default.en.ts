@@ -1,4 +1,3 @@
-/* eslint-disable */
 
 /** I18NTABLESYMBOL */
 export default {

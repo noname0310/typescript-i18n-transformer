@@ -15,9 +15,6 @@ export default [
     ...tseslint.configs.recommended,
     pluginReact.configs.flat.recommended,
     {
-        react: {
-            version: "detect"
-        },
         plugins: {
             "simple-import-sort": simpleImportSort,
             "@stylistic/js": stylisticJs,

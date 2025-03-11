@@ -62,27 +62,15 @@ class TransformerBuilder {
         }
     }
 
-    private _getNamespaceFromFilename(fileName: string): string | undefined {
-        const dotIndex = fileName.lastIndexOf(".");
-        if (dotIndex === -1) {
-            return undefined;
-        }
-        const dot2Index = fileName.lastIndexOf(".", dotIndex - 1);
-        if (dot2Index === -1) {
-            return undefined;
-        }
-        return fileName.slice(0, dot2Index);
-    }
-
     private _buildReplacementTable(): { table: Map<string, [number, number]>, languages: Set<string> } {
         const table: Map<string, [number, number]> = new Map();
         const languages: Set<string> = new Set();
         const indexCache: Map<string, number> = new Map(); // key: namespace, value: index
         for (const sourceFile of this._program.getSourceFiles()) {
             const fileName = path.basename(sourceFile.fileName, ".ts");
-            const namespace = this._getNamespaceFromFilename(fileName);
-            
-            console.log("fileName", fileName, "namespace", namespace); //debug
+            const dotIndex = fileName.lastIndexOf(".");
+            const languageName = dotIndex === -1 ? fileName : fileName.slice(dotIndex + 1);
+            const namespace = dotIndex === -1 ? undefined : fileName.slice(0, dotIndex);
             if (namespace === undefined) {
                 continue;
             }
@@ -113,9 +101,6 @@ class TransformerBuilder {
                                 item[1] += 1;
                             }
                         }
-                        const dotIndex = fileName.lastIndexOf(".");
-                        const languageName = dotIndex === -1 ? fileName : fileName.slice(dotIndex + 1);
-                        console.log(languageName); //debug
                         languages.add(languageName);
                     }
                 }
@@ -143,9 +128,13 @@ class TransformerBuilder {
     ): ts.SourceFile {
         const checker = this._program.getTypeChecker();
         const languageCount = this._availableLanguages.size;
+        const fileName = path.basename(sourceFile.fileName, ".ts");
+        const dotIndex = fileName.lastIndexOf(".");
+        const namespace = dotIndex === -1 ? undefined : fileName.slice(0, dotIndex);
+
         const visitor = (node: ts.Node): ts.Node => {
             // Replace I18N loc text table keys
-            if (ts.isExportAssignment(node)) {
+            if (ts.isExportAssignment(node) && namespace !== undefined) {
                 const comment = getNodeComment(node);
                 if (comment.includes(tableComment)) {
                     if (!ts.isObjectLiteralExpression(node.expression)) {
@@ -158,9 +147,10 @@ class TransformerBuilder {
                                 return prop;
                             }
                             const key = prop.name.text;
-                            const index = this._replaceTable.get(key);
+                            const fullKey = namespace + "." + key;
+                            const index = this._replaceTable.get(fullKey);
                             if (index === undefined) {
-                                console.error(`I18N table key not found: ${key}`);
+                                console.error(`I18N table key not found: ${fullKey}`);
                                 return prop;
                             } else if (index[1] !== languageCount) {
                                 return prop;

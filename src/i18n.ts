@@ -59,6 +59,7 @@ export interface I18nCreationOptions<SupportedLanguage extends string = string> 
     onTableLoaded?: () => void;
 }
 
+/** I18NCONSTRUCTORSYMBOL */
 export class I18n<LanguageData extends I18nLanguageData, SupportedLanguage extends string = KeyOf<LanguageData>> {
     private readonly _languageData: LanguageData;
     private readonly _supportedLanguages: SupportedLanguage[];
@@ -72,7 +73,6 @@ export class I18n<LanguageData extends I18nLanguageData, SupportedLanguage exten
     private readonly _fallbackText: string;
     private readonly _onTableLoaded?: (namespace: string, language: SupportedLanguage) => void;
 
-    /** I18NCONSTRUCTORSYMBOL */
     public constructor(
         languageData: LanguageData,
         options: I18nCreationOptions<NoInfer<SupportedLanguage>> = {}

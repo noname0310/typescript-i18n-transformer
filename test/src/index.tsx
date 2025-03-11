@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import type { I18nData } from "typescript-i18n-transformer/src/i18n";
-import { I18n } from "typescript-i18n-transformer/src/i18n";
+import type { I18nData } from "typescript-i18n-transformer/i18n";
+import { I18n } from "typescript-i18n-transformer/i18n";
 
 import { App } from "./App";
 

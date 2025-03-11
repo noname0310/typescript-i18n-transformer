@@ -2,9 +2,9 @@
     "name": "typescript-i18n-transformer",
     "version": "1.0.0",
     "description": "typescript transformer for auto i18n code generation",
-    "main": "src/index.js",
+    "main": "index.js",
     "bin": {
-        "i18nt-codegen": "tspc --project tsconfig.i18ncodegen.json"
+        "i18nt-codegen": "i18nCodegen.js"
     },
     "scripts": {
         "start": "npm run lint && npm run build && npm run test",
@@ -24,6 +24,9 @@
     },
     "homepage": "https://github.com/noname0310/typescript-i18n-transformer#readme",
     "sideEffects": false,
+    "dependencies": {
+        "typescript": "^5.8.2"
+    },
     "devDependencies": {
         "@stylistic/eslint-plugin-js": "^4.2.0",
         "@stylistic/eslint-plugin-ts": "^4.2.0",
@@ -32,7 +35,6 @@
         "eslint-plugin-simple-import-sort": "^12.1.1",
         "ts-node": "^10.9.2",
         "ts-patch": "^3.3.0",
-        "typescript": "^5.8.2",
         "typescript-eslint": "^8.26.1",
         "typescript-transform-paths": "^3.5.3"
     }
