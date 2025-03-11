@@ -1,0 +1,12 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "skipLibCheck": true,
+        "noEmit": true,
+        "declaration": true,
+        "plugins": [
+            { "transform": "./src/core/I18n/i18nUpdateTableTransformer.ts" }
+        ]
+    },
+    "include": ["src/**/*"]
+}
