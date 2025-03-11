@@ -42,6 +42,4 @@ export default {
     "Platform Demo": "Platform Demo"
 }; /** I18NTABLEEND */
 
-export const dynamic = {
-    "dynamicText": "dynamic text"
-};
+export const dynamic: Record<string, string> = {};

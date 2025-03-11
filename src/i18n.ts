@@ -83,7 +83,7 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         this._defaultLanguage = options.defaultLanguage ?? this._supportedLanguages[0];
         this._language = this._defaultLanguage;
         this._fetchedNamespaces = new Set();
-        
+
         this._tables = new Map();
         this._dynamicTables = new Map();
 
@@ -133,8 +133,7 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         if (autoFetch) {
             const fetchedNamespaces = new Set(this._fetchedNamespaces);
             this._fetchedNamespaces.clear();
-            let tableUpdated = false;
-            Promise.all(Array.from(fetchedNamespaces).map(async (ns) => {
+            Promise.all(Array.from(fetchedNamespaces).map(async(ns) => {
                 await this.prefetchLanguageTable(language, ns, true) || tableUpdated;
             })).then(() => {
                 this._onTableLoaded?.(this._language, language);

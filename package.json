@@ -36,6 +36,6 @@
         "ts-node": "^10.9.2",
         "ts-patch": "^3.3.0",
         "typescript-eslint": "^8.26.1",
-        "typescript-transform-paths": "^3.5.3"
+        "typescript-transform-paths": "^3.5.4"
     }
 }
