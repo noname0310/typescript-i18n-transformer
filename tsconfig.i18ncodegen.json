@@ -5,7 +5,7 @@
         "noEmit": true,
         "declaration": true,
         "plugins": [
-            { "transform": "./i18nUpdateTableTransformer.js" }
+            { "transform": "./i18nUpdateTableTransformer.js", "resourceDir": "src/language" }
         ]
     },
     "include": ["../../src/**/*"]

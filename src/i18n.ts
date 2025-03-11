@@ -55,7 +55,7 @@ export interface Logger {
 export interface I18nCreationOptions<SupportedLanguage extends string = string> {
     defaultLanguage?: SupportedLanguage;
     logger?: Logger;
-    fallbackText?: string;
+    fallbackText?: string | null;
     onTableLoaded?: (namespace: string, language: SupportedLanguage) => void;
 }
 
@@ -65,12 +65,13 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
     private readonly _supportedLanguages: SupportedLanguage[];
     private readonly _defaultLanguage: SupportedLanguage;
     private _language: SupportedLanguage;
+    private readonly _fetchedNamespaces: Set<string>;
 
     private readonly _tables: Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>; // namespace -> key -> value
     private readonly _dynamicTables: Map<NamespaceString<SupportedLanguage>, { [key: string]: string }>; // namespace -> key -> value
 
     private readonly _logger: Logger;
-    private readonly _fallbackText: string;
+    private readonly _fallbackText: string | null;
     private readonly _onTableLoaded?: (namespace: string, language: SupportedLanguage) => void;
 
     public constructor(
@@ -81,7 +82,8 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         this._supportedLanguages = Object.keys(languageData) as SupportedLanguage[];
         this._defaultLanguage = options.defaultLanguage ?? this._supportedLanguages[0];
         this._language = this._defaultLanguage;
-
+        this._fetchedNamespaces = new Set();
+        
         this._tables = new Map();
         this._dynamicTables = new Map();
 
@@ -108,6 +110,7 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
 
         const key = namespace + "." + language as NamespaceString<SupportedLanguage>;
 
+        this._fetchedNamespaces.add(namespace);
         const table = await this._languageData[language][namespace]();
         tables.set(key, table.default);
         dynamicTables.set(key, table.dynamic);
@@ -116,7 +119,8 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
     }
 
     public setLanguage(
-        language: SupportedLanguage
+        language: SupportedLanguage,
+        autoFetch = true
     ): void {
         if (this._supportedLanguages.includes(language) === false) {
             language = this._defaultLanguage;
@@ -126,6 +130,18 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
             return;
         }
         this._language = language;
+        if (autoFetch) {
+            const fetchedNamespaces = new Set(this._fetchedNamespaces);
+            this._fetchedNamespaces.clear();
+            let tableUpdated = false;
+            Promise.all(Array.from(fetchedNamespaces).map(async (ns) => {
+                await this.prefetchLanguageTable(language, ns, true) || tableUpdated;
+            })).then(() => {
+                this._onTableLoaded?.(this._language, language);
+            });
+        } else {
+            this._onTableLoaded?.(this._language, language);
+        }
     }
 
     public getLanguage(): SupportedLanguage {
@@ -147,8 +163,16 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
 
     public async prefetchLanguageTable(
         language: SupportedLanguage,
-        namespace: string = "default"
-    ): Promise<void> {
+        namespace: string = "default",
+        doNotNotify = false
+    ): Promise<boolean> {
+        if (this._languageData[language][namespace] === undefined) {
+            this._logger.log(`Table data not found for ${namespace}.${language}`);
+            return false;
+        }
+        if (this._tables.has(namespace + "." + language as NamespaceString<SupportedLanguage>)) {
+            return false;
+        }
         const [table, dynamicTable] = await this._loadLanguageTable(language, namespace);
         for (const [key, value] of table) {
             this._tables.set(key, value);
@@ -156,7 +180,10 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         for (const [key, value] of dynamicTable) {
             this._dynamicTables.set(key, value);
         }
-        this._onTableLoaded?.(namespace, language);
+        if (!doNotNotify) {
+            this._onTableLoaded?.(namespace, language);
+        }
+        return true;
     }
 
     /** I18NNSLOCTEXTSYMBOL */
@@ -181,13 +208,10 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         const tableData = (dynamic ? this._dynamicTables : this._tables)
             .get(ns + "." + this._language as NamespaceString<SupportedLanguage>);
 
+        // table miss
         if (tableData === undefined) {
-            if (this._languageData[this._language][ns] === undefined) {
-                this._logger.log(`Table data not found for ${ns}.${this._language}, key: ${key}`);
-            } else {
-                this.prefetchLanguageTable(this._language, ns);
-            }
-            if (dynamic) {
+            this.prefetchLanguageTable(this._language, ns);
+            if (dynamic || this._fallbackText === null) {
                 return this._interpolate(key.toString(), args);
             } else {
                 return this._interpolate(this._fallbackText, args);
@@ -197,7 +221,7 @@ export class I18n<LanguageData extends I18nLanguageData = I18nLanguageData, Supp
         const value = tableData[key];
         if (value === undefined) {
             this._logger.log(`Key not found for ${ns}.${this._language}, key: ${key}`);
-            if (dynamic) {
+            if (dynamic || this._fallbackText === null) {
                 return this._interpolate(key.toString(), args);
             } else {
                 return this._interpolate(this._fallbackText, args);

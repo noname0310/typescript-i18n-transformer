@@ -42,6 +42,7 @@ export function I18nProvider(props: I18nProviderProps): JSX.Element {
             {
                 defaultLanguage: "en",
                 logger: console,
+                fallbackText: process.env.NODE_ENV === "development" ? null : "",
                 onTableLoaded: (_namespace, _language): void => {
                     setI18n((prev) => ({
                         value: prev.value,
@@ -58,7 +59,7 @@ export function I18nProvider(props: I18nProviderProps): JSX.Element {
 
     return (
         <I18nContext.Provider value={i18n}>
-            {children}
+            {i18n.value && children}
         </I18nContext.Provider>
     );
 }
