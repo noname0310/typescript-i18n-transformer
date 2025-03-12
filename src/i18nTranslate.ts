@@ -2,7 +2,7 @@
 import fs from "fs";
 import openAi from "openai";
 import path from "path";
-import * as ts from "typescript";
+import ts from "typescript";
 import { parseArgs } from "util";
 
 import type { TranslationMap, TranslationRequestData } from "./i18nTranslationTransformer";
