@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import dotenv from "dotenv";
 import fs from "fs";
 import openAi from "openai";
 import path from "path";
@@ -7,6 +8,8 @@ import { parseArgs } from "util";
 
 import type { TranslationMap, TranslationRequestData } from "./i18nTranslationTransformer";
 import i18nTranslationTransformer, { I18nTranslationTransformerCache } from "./i18nTranslationTransformer";
+
+dotenv.config();
 
 // OpenAI configuration
 const openAiClient = new openAi.OpenAI({
