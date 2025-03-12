@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import ts from "typescript";
 
-import { i18nConstructorComment, locTextMethodComment, nsLocTextMethodComment, tableComment, tableEndPostFix } from "./i18nTransformerConstants";
+import { i18nConstructorComment, locTextMethodComment, nsLocTextMethodComment, tableEndPostFix } from "./i18nTransformerConstants";
 import { chainBundle, getNodeComment, resolveAliasedSymbol } from "./transformerCommon";
 
 type TextKey = `${string}.${string}`; // namespace.key (e.g. "default.hello")
@@ -198,6 +198,9 @@ class TransformerBuilder {
         }
 
         for (const sourceFile of this._program.getSourceFiles()) {
+            const fileName = path.basename(sourceFile.fileName, ".ts");
+            const [namespace, language] = fileName.split(".");
+
             const resolvedFileName = path.resolve(sourceFile.fileName);
             const textKeys = languageFileNameToTextsMap.get(resolvedFileName);
             if (textKeys !== undefined) {
@@ -209,37 +212,29 @@ class TransformerBuilder {
                 const parsedTable = JSON.parse(`{${table}}`) as Record<string, string>;
 
                 const leftKeys = new Set(Object.keys(parsedTable));
-                let addedKeys = 0;
+                let translatedKeys = 0;
                 for (const key of textKeys) {
                     if (parsedTable[key]) {
                         leftKeys.delete(key);
-                        continue;
                     }
-
-                    parsedTable[key] = key;
-                    addedKeys += 1;
+                    const translation = translationMap[language]?.[`${namespace}.${key}`] as string | undefined;
+                    if (translation !== undefined) {
+                        parsedTable[key] = translation;
+                        translatedKeys += 1;
+                    }
                 }
 
-                if (addedKeys !== 0) {
+                if (translatedKeys !== 0) {
                     const newTable = JSON.stringify(parsedTable, null, 4);
                     const newContent = content.slice(0, firstLeftBraceIndex) + newTable + content.slice(lastRightBraceIndex + 1);
                     fs.writeFileSync(resolvedFileName, newContent, "utf-8");
-                    console.log(`Added ${addedKeys} keys to ${resolvedFileName}`);
+                    console.log(`Added ${translatedKeys} keys to ${resolvedFileName}`);
                 }
 
                 if (leftKeys.size !== 0) {
-                    console.warn(`Unused keys in ${resolvedFileName}: ${Array.from(leftKeys).join(", ")}`);
+                    console.warn(`Untranslated keys in ${resolvedFileName}: ${Array.from(leftKeys).join(", ")}`);
                 }
-
-                languageFileNameToTextsMap.delete(resolvedFileName);
             }
-        }
-
-        for (const [fileName, textKeys] of languageFileNameToTextsMap) {
-            const content = `/* eslint-disable */\n\n/** ${tableComment} */\nexport default ${JSON.stringify(Object.fromEntries(textKeys.map(key => [key, key])), null, 4)}; /** ${tableEndPostFix} */\n\nexport const dynamic: Record<string, string> = {};\n`;
-            fs.mkdirSync(path.dirname(fileName), { recursive: true });
-            fs.writeFileSync(fileName, content, "utf-8");
-            console.log(`Created ${fileName}`);
         }
     }
 }

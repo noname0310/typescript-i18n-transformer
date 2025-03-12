@@ -9,9 +9,13 @@
     },
     "scripts": {
         "start": "npm run lint && npm run build && npm run test",
+        "start:codegen": "npm run lint && npm run build && npm run test:codegen",
+        "start:translate": "npm run lint && npm run build && npm run test:translate",
         "build": "ts-node publishScript.ts",
         "publish:lib": "npm run build && npm publish ./dist",
-        "test": "cd test && npm run build && npm run i18n-codegen",
+        "test": "cd test && npm run build",
+        "test:codegen": "cd test && npm run i18n-codegen",
+        "test:translate": "cd test && npm run i18n-translate",
         "lint": "eslint src --fix --cache"
     },
     "repository": {
