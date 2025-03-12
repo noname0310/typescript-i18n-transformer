@@ -33,12 +33,18 @@ async function getTranslationContext(filePath: string, position: number): Promis
 async function translateWithGPT4o(
     text: string,
     contexts: string[],
-    targetLanguage: string
+    targetLanguage: string,
+    additionalContext?: string
 ): Promise<string> {
     try {
         const formattedContexts = contexts
             .map((ctx, index) => `Context ${index + 1}:\n${ctx}`)
             .join("\n\n");
+
+        // Add additional context if provided
+        const fullContext = additionalContext
+            ? `${formattedContexts}\n\nAdditional Context:\n${additionalContext}`
+            : formattedContexts;
 
         const response = await openAiClient.chat.completions.create({
             model: "gpt-4o",
@@ -52,7 +58,7 @@ async function translateWithGPT4o(
                 },
                 {
                     role: "user",
-                    content: `${formattedContexts}\n\nText to translate: "${text}"`
+                    content: `${fullContext}\n\nText to translate: "${text}"`
                 }
             ],
             temperature: 0.3,
@@ -72,8 +78,9 @@ const args = parseArgs({
     allowPositionals: true,
     options: {
         resourceDir: { type: "string", short: "r", default: "src/language" },
-        configPath: { type: "string", short: "c", default: "tsconfig.json" },
-        defaultLanguage: { type: "string", short: "d" }
+        tsConfigPath: { type: "string", short: "c", default: "tsconfig.json" },
+        defaultLanguage: { type: "string", short: "d" },
+        additionalContext: { type: "string", short: "a", default: "" }
     }
 });
 
@@ -167,7 +174,7 @@ async function compileWithTsApi(configPath: string): Promise<void> {
                 const textToTranslate = key.split(".")[1];
 
                 // Translate the text with all contexts
-                const translation = await translateWithGPT4o(textToTranslate, contexts, language);
+                const translation = await translateWithGPT4o(textToTranslate, contexts, language, args.values.additionalContext);
                 translationMap[language][key] = translation;
 
                 // Log progress
@@ -202,4 +209,4 @@ async function compileWithTsApi(configPath: string): Promise<void> {
 }
 
 // Run the compiler
-compileWithTsApi(args.values.configPath);
+compileWithTsApi(args.values.tsConfigPath);

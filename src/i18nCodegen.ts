@@ -10,7 +10,7 @@ const args = parseArgs({
     allowPositionals: true,
     options: {
         resourceDir: { type: "string", short: "r", default: "src/language" },
-        configPath: { type: "string", short: "c", default: "tsconfig.json" }
+        tsConfigPath: { type: "string", short: "c", default: "tsconfig.json" }
     }
 });
 
@@ -93,4 +93,4 @@ function compileWithTsApi(configPath: string): void {
 // }
 
 // Run the compiler
-compileWithTsApi(args.values.configPath);
+compileWithTsApi(args.values.tsConfigPath);
