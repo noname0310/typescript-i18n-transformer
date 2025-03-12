@@ -16,7 +16,7 @@ export default (env: any): webpack.Configuration & { devServer?: WebpackDevServe
         clean: true
     },
     optimization: {
-        minimize: env.production
+        minimize: false
     },
     cache: true,
     module: {
