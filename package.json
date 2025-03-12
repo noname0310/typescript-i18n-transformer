@@ -30,6 +30,7 @@
     "homepage": "https://github.com/noname0310/typescript-i18n-transformer#readme",
     "sideEffects": false,
     "dependencies": {
+        "openai": "^4.87.3",
         "typescript": "^5.8.2"
     },
     "devDependencies": {

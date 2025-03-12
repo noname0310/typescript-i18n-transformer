@@ -10,9 +10,15 @@ type TextKey = `${string}.${string}`; // namespace.key (e.g. "default.hello")
 export type FunctionCallMap = {
     [key: TextKey]: {
         filePath: string;
-        line: number;
-        column: number;
+        pos: number;
     }[];
+}
+
+export type TranslationRequestData = {
+    functionCallMap: FunctionCallMap;
+    untranslatedKeys: {
+        [language: string]: Set<TextKey>;
+    };
 }
 
 export type TranslationMap = {
@@ -34,7 +40,7 @@ export class I18nTranslationTransformerCache {
 class TransformerBuilder {
     private readonly _program: ts.Program;
 
-    private readonly _functionCallMapOutput: FunctionCallMap | undefined;
+    private readonly _translationRequestData: TranslationRequestData | undefined;
     private readonly _cache: I18nTranslationTransformerCache;
 
     private readonly _resourceDir: string;
@@ -45,10 +51,10 @@ class TransformerBuilder {
     ) {
         this._program = program;
 
-        this._functionCallMapOutput = config?.functionCallMapOutput;
+        this._translationRequestData = config?.translationRequestData;
 
         this._cache = config?.cache ?? new I18nTranslationTransformerCache();
-        if (this._cache.textKeySet === undefined || this._functionCallMapOutput !== undefined) {
+        if (this._cache.textKeySet === undefined || this._translationRequestData !== undefined) {
             this._cache.textKeySet = this._buildTextKeySet();
         }
 
@@ -66,16 +72,16 @@ class TransformerBuilder {
         return chainBundle(visitor);
     }
 
-    private _funtionCallMapAdd(key: TextKey, filePath: string, line: number, column: number): void {
-        if (!this._functionCallMapOutput) {
+    private _funtionCallMapAdd(key: TextKey, filePath: string, pos: number): void {
+        if (this._translationRequestData === undefined) {
             return;
         }
 
-        if (!this._functionCallMapOutput[key]) {
-            this._functionCallMapOutput[key] = [];
+        if (!this._translationRequestData.functionCallMap[key]) {
+            this._translationRequestData.functionCallMap[key] = [];
         }
 
-        this._functionCallMapOutput[key].push({ filePath, line, column });
+        this._translationRequestData.functionCallMap[key].push({ filePath, pos });
     }
 
     private _buildTextKeySet(): Set<TextKey> {
@@ -92,7 +98,7 @@ class TransformerBuilder {
                             if (1 <= node.arguments.length && ts.isStringLiteral(node.arguments[0])) {
                                 const key = node.arguments[0].text;
                                 set.add(`default.${key}`);
-                                this._funtionCallMapAdd(`default.${key}`, sourceFile.fileName, node.getStart(sourceFile), node.getStart(sourceFile));
+                                this._funtionCallMapAdd(`default.${key}`, sourceFile.fileName, node.getStart(sourceFile));
                             } else {
                                 console.error("locTextMethod must have string literal argument");
                             }
@@ -102,7 +108,7 @@ class TransformerBuilder {
                                     const ns = node.arguments[0].text;
                                     const key = node.arguments[1].text;
                                     set.add(`${ns}.${key}`);
-                                    this._funtionCallMapAdd(`${ns}.${key}`, sourceFile.fileName, node.getStart(sourceFile), node.getStart(sourceFile));
+                                    this._funtionCallMapAdd(`${ns}.${key}`, sourceFile.fileName, node.getStart(sourceFile));
                                 } else {
                                     console.error("nsLocTextMethod must have string literal arguments");
                                 }
@@ -173,12 +179,10 @@ class TransformerBuilder {
         return supportedLanguages;
     }
 
-    public updateTable(translationMap: TranslationMap): void {
+    private _buildLanguageFileNameToTextsMap(): Map<string, string[]> {
         const supportedLanguages = this._cache.supportedLanguages ?? this._readConfig();
         this._cache.supportedLanguages = supportedLanguages;
-
         const absoluteResourceDir = path.resolve(this._resourceDir);
-        translationMap;
 
         const languageFileNameToTextsMap = new Map<string, string[]>();
         for (const textKey of this._cache.textKeySet!) {
@@ -196,6 +200,47 @@ class TransformerBuilder {
                 texts.push(key);
             }
         }
+
+        return languageFileNameToTextsMap;
+    }
+
+    public collectUntranslatedKeys(): void {
+        if (this._translationRequestData === undefined) {
+            return;
+        }
+
+        const languageFileNameToTextsMap = this._buildLanguageFileNameToTextsMap();
+
+        for (const sourceFile of this._program.getSourceFiles()) {
+            const fileName = path.basename(sourceFile.fileName, ".ts");
+            const [namespace, language] = fileName.split(".");
+
+            const resolvedFileName = path.resolve(sourceFile.fileName);
+            const textKeys = languageFileNameToTextsMap.get(resolvedFileName);
+            if (textKeys === undefined) {
+                continue;
+            }
+
+            const content = fs.readFileSync(resolvedFileName, "utf-8");
+            const firstLeftBraceIndex = content.indexOf("{");
+            const tableEndIndex = content.lastIndexOf(tableEndPostFix);
+            const lastRightBraceIndex = content.lastIndexOf("}", tableEndIndex);
+            const table = content.slice(firstLeftBraceIndex + 1, lastRightBraceIndex);
+            const parsedTable = JSON.parse(`{${table}}`) as Record<string, string>;
+
+            for (const key of textKeys) {
+                if (parsedTable[key] === key) {
+                    if (this._translationRequestData.untranslatedKeys[language] === undefined) {
+                        this._translationRequestData.untranslatedKeys[language] = new Set();
+                    }
+                    this._translationRequestData.untranslatedKeys[language].add(`${namespace}.${key}`);
+                }
+            }
+        }
+    }
+
+    public updateTable(translationMap: TranslationMap): void {
+        const languageFileNameToTextsMap = this._buildLanguageFileNameToTextsMap();
 
         for (const sourceFile of this._program.getSourceFiles()) {
             const fileName = path.basename(sourceFile.fileName, ".ts");
@@ -218,7 +263,7 @@ class TransformerBuilder {
                         leftKeys.delete(key);
                     }
                     const translation = translationMap[language]?.[`${namespace}.${key}`] as string | undefined;
-                    if (translation !== undefined) {
+                    if (translation !== undefined && parsedTable[key] === key) {
                         parsedTable[key] = translation;
                         translatedKeys += 1;
                     }
@@ -241,13 +286,16 @@ class TransformerBuilder {
 
 export type TransformerConfig = {
     resourceDir?: string;
-    functionCallMapOutput?: FunctionCallMap;
+    translationRequestData?: TranslationRequestData;
     translationMap?: TranslationMap;
     cache?: I18nTranslationTransformerCache;
 };
 
 export function i18nTranslationTransformer(program: ts.Program, config?: TransformerConfig): ts.TransformerFactory<ts.SourceFile> {
     const builder = new TransformerBuilder(program, config);
+    if (config?.translationRequestData) {
+        builder.collectUntranslatedKeys();
+    }
     if (config?.translationMap) {
         builder.updateTable(config.translationMap);
     }
