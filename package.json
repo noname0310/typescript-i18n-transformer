@@ -1,6 +1,6 @@
 {
     "name": "typescript-i18n-transformer",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "description": "typescript transformer for auto i18n code generation",
     "main": "index.js",
     "bin": {
