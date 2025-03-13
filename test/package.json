@@ -7,10 +7,13 @@
         "build": "npm link ../dist && webpack --env production",
         "lint": "eslint src --fix --cache",
         "i18n-codegen": "i18nt-codegen -r src/language",
-        "i18n-translate": "i18nt-translate -r src/language -d en"
+        "i18n-translate": "i18nt-translate -r src/language -d en",
+        "i18n": "npm run i18n-codegen && npm run i18n-translate"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.26.9",
+        "@stylistic/eslint-plugin-js": "^4.2.0",
+        "@stylistic/eslint-plugin-ts": "^4.2.0",
         "@types/react": "^19.0.10",
         "@types/react-dom": "^19.0.4",
         "babel-loader": "^10.0.0",
@@ -27,6 +30,7 @@
         "style-loader": "^4.0.0",
         "styled-components": "^6.1.15",
         "ts-loader": "^9.5.2",
+        "ts-node": "^10.9.2",
         "ts-patch": "^3.3.0",
         "typescript": "^5.8.2",
         "typescript-eslint": "^8.26.1",
